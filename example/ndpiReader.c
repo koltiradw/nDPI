@@ -1536,17 +1536,22 @@ static void printFlow(u_int32_t id, struct ndpi_flow_info *flow, u_int16_t threa
             100.0*((float)flow->dst2src_goodput_bytes / (float)(flow->dst2src_bytes+1)));
 
     /* IAT (Inter Arrival Time) */
-    fprintf(csv_fp, "%u,%.1f,%u,%.1f,",
-            ndpi_data_min(flow->iat_flow), ndpi_data_average(flow->iat_flow), ndpi_data_max(flow->iat_flow), ndpi_data_stddev(flow->iat_flow));
+    fprintf(csv_fp, "%llu,%.1f,%llu,%.1f,",
+            (unsigned long long int)ndpi_data_min(flow->iat_flow), ndpi_data_average(flow->iat_flow),
+            (unsigned long long int)ndpi_data_max(flow->iat_flow), ndpi_data_stddev(flow->iat_flow));
 
-    fprintf(csv_fp, "%u,%.1f,%u,%.1f,%u,%.1f,%u,%.1f,",
-	    ndpi_data_min(flow->iat_c_to_s), ndpi_data_average(flow->iat_c_to_s), ndpi_data_max(flow->iat_c_to_s), ndpi_data_stddev(flow->iat_c_to_s),
-	    ndpi_data_min(flow->iat_s_to_c), ndpi_data_average(flow->iat_s_to_c), ndpi_data_max(flow->iat_s_to_c), ndpi_data_stddev(flow->iat_s_to_c));
+    fprintf(csv_fp, "%llu,%.1f,%llu,%.1f,%llu,%.1f,%llu,%.1f,",
+	    (unsigned long long int)ndpi_data_min(flow->iat_c_to_s), ndpi_data_average(flow->iat_c_to_s),
+        (unsigned long long int)ndpi_data_max(flow->iat_c_to_s), ndpi_data_stddev(flow->iat_c_to_s),
+	    (unsigned long long int)ndpi_data_min(flow->iat_s_to_c), ndpi_data_average(flow->iat_s_to_c),
+        (unsigned long long int)ndpi_data_max(flow->iat_s_to_c), ndpi_data_stddev(flow->iat_s_to_c));
 
     /* Packet Length */
-    fprintf(csv_fp, "%u,%.1f,%u,%.1f,%u,%.1f,%u,%.1f,",
-	    ndpi_data_min(flow->pktlen_c_to_s), ndpi_data_average(flow->pktlen_c_to_s), ndpi_data_max(flow->pktlen_c_to_s), ndpi_data_stddev(flow->pktlen_c_to_s),
-	    ndpi_data_min(flow->pktlen_s_to_c), ndpi_data_average(flow->pktlen_s_to_c), ndpi_data_max(flow->pktlen_s_to_c), ndpi_data_stddev(flow->pktlen_s_to_c));
+    fprintf(csv_fp, "%llu,%.1f,%llu,%.1f,%llu,%.1f,%llu,%.1f,",
+	    (unsigned long long int)ndpi_data_min(flow->pktlen_c_to_s), ndpi_data_average(flow->pktlen_c_to_s),
+        (unsigned long long int)ndpi_data_max(flow->pktlen_c_to_s), ndpi_data_stddev(flow->pktlen_c_to_s),
+	    (unsigned long long int)ndpi_data_min(flow->pktlen_s_to_c), ndpi_data_average(flow->pktlen_s_to_c),
+        (unsigned long long int)ndpi_data_max(flow->pktlen_s_to_c), ndpi_data_stddev(flow->pktlen_s_to_c));
 
     /* TCP flags */
     fprintf(csv_fp, "%d,%d,%d,%d,%d,%d,%d,%d,", flow->cwr_count, flow->ece_count, flow->urg_count, flow->ack_count, flow->psh_count, flow->rst_count, flow->syn_count, flow->fin_count);
@@ -1819,17 +1824,21 @@ static void printFlow(u_int32_t id, struct ndpi_flow_info *flow, u_int16_t threa
 	fprintf(out, "[bytes ratio: %.3f (%s)]", data_ratio, ndpi_data_ratio2str(data_ratio));
 
 	/* IAT (Inter Arrival Time) */
-	fprintf(out, "[IAT c2s/s2c min/avg/max/stddev: %u/%u %.0f/%.0f %u/%u %.0f/%.0f]",
-		ndpi_data_min(flow->iat_c_to_s),     ndpi_data_min(flow->iat_s_to_c),
+	fprintf(out, "[IAT c2s/s2c min/avg/max/stddev: %llu/%llu %.0f/%.0f %llu/%llu %.0f/%.0f]",
+		(unsigned long long int)ndpi_data_min(flow->iat_c_to_s),
+        (unsigned long long int)ndpi_data_min(flow->iat_s_to_c),
 		(float)ndpi_data_average(flow->iat_c_to_s), (float)ndpi_data_average(flow->iat_s_to_c),
-		ndpi_data_max(flow->iat_c_to_s),     ndpi_data_max(flow->iat_s_to_c),
+		(unsigned long long int)ndpi_data_max(flow->iat_c_to_s),
+        (unsigned long long int)ndpi_data_max(flow->iat_s_to_c),
 		(float)ndpi_data_stddev(flow->iat_c_to_s),  (float)ndpi_data_stddev(flow->iat_s_to_c));
 
 	/* Packet Length */
-	fprintf(out, "[Pkt Len c2s/s2c min/avg/max/stddev: %u/%u %.0f/%.0f %u/%u %.0f/%.0f]",
-		ndpi_data_min(flow->pktlen_c_to_s), ndpi_data_min(flow->pktlen_s_to_c),
+	fprintf(out, "[Pkt Len c2s/s2c min/avg/max/stddev: %llu/%llu %.0f/%.0f %llu/%llu %.0f/%.0f]",
+		(unsigned long long int)ndpi_data_min(flow->pktlen_c_to_s),
+        (unsigned long long int)ndpi_data_min(flow->pktlen_s_to_c),
 		ndpi_data_average(flow->pktlen_c_to_s), ndpi_data_average(flow->pktlen_s_to_c),
-		ndpi_data_max(flow->pktlen_c_to_s), ndpi_data_max(flow->pktlen_s_to_c),
+		(unsigned long long int)ndpi_data_max(flow->pktlen_c_to_s),
+        (unsigned long long int)ndpi_data_max(flow->pktlen_s_to_c),
 		ndpi_data_stddev(flow->pktlen_c_to_s),  ndpi_data_stddev(flow->pktlen_s_to_c));
       }
     }
@@ -2680,8 +2689,13 @@ static void setupDetection(u_int16_t thread_id, pcap_t * pcap_handle) {
       exit(-1);
   }
 
-  if(_categoriesDirPath)
-    ndpi_load_categories_dir(ndpi_thread_info[thread_id].workflow->ndpi_struct, _categoriesDirPath);
+  if(_categoriesDirPath) {
+    int failed_files = ndpi_load_categories_dir(ndpi_thread_info[thread_id].workflow->ndpi_struct, _categoriesDirPath);
+    if (failed_files < 0) {
+      fprintf(stderr, "Failed to parse all *.list files in: %s\n", _categoriesDirPath);
+      exit(-1);
+    }
+  }
   
   if(_riskyDomainFilePath)
     ndpi_load_risk_domain_file(ndpi_thread_info[thread_id].workflow->ndpi_struct, _riskyDomainFilePath);
@@ -2700,7 +2714,11 @@ static void setupDetection(u_int16_t thread_id, pcap_t * pcap_handle) {
     else
       label = _customCategoryFilePath;
 
-    ndpi_load_categories_file(ndpi_thread_info[thread_id].workflow->ndpi_struct, _customCategoryFilePath, label);
+    int failed_lines = ndpi_load_categories_file(ndpi_thread_info[thread_id].workflow->ndpi_struct, _customCategoryFilePath, label);
+    if (failed_lines < 0) {
+      fprintf(stderr, "Failed to parse custom categories file: %s\n", _customCategoryFilePath);
+      exit(-1);
+    }
   }
 
   /* Make sure to load lists before finalizing the initialization */
@@ -4901,7 +4919,9 @@ void analysisUnitTest() {
     printf("Average: [all: %f][window: %f]\n", ndpi_data_average(s), ndpi_data_window_average(s));
     printf("Entropy: %f\n", ndpi_data_entropy(s));
     printf("StdDev:  %f\n", ndpi_data_stddev(s));
-    printf("Min/Max: %u/%u\n", ndpi_data_min(s), ndpi_data_max(s));
+    printf("Min/Max: %llu/%llu\n",
+        (unsigned long long int)ndpi_data_min(s),
+        (unsigned long long int)ndpi_data_max(s));
   }
 
   ndpi_free_data_analysis(s, 1);
@@ -5505,18 +5525,6 @@ void domainSearchUnitTest() {
   assert(ndpi_domain_classify_contains(sc, &class_id, "123vc.club"));
   assert(class_id == NDPI_PROTOCOL_CATEGORY_GAMBLING);
 
-#if 0
-  {
-    const char *fname = NDPI_BASE_DIR "/lists/gambling.list";
-    u_int32_t num_domains;
-    
-    num_domains = ndpi_domain_classify_add_domains(sc, NDPI_PROTOCOL_GAMBLING, (char*)fname);
-    assert(num_domains == 35370);
-
-    assert(ndpi_domain_classify_contains(sc, "0grand-casino.com") == NDPI_PROTOCOL_GAMBLING);
-  }
-#endif
-  
   /* Subdomain check */
   assert(ndpi_domain_classify_contains(sc, &class_id, "blog.ntop.org"));
   assert(class_id == NDPI_PROTOCOL_NTOP);
