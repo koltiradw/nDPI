@@ -1,4 +1,5 @@
-#!/bin/bash -eu
+#!/usr/bin/env bash
+set -eu
 # Copyright 2019 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,26 +44,28 @@ fi
 cd ndpi
 # Set LDFLAGS variable and `--with-only-libndpi` option as workaround for the
 # "missing dependencies errors" in the introspector build. See #8939
-LDFLAGS="-lpcap" ./autogen.sh --enable-fuzztargets --with-only-libndpi --enable-tls-sigs
+RANLIB=llvm-ranlib LDFLAGS="-L/usr/local/lib -lpcap" ./autogen.sh --enable-fuzztargets --with-only-libndpi --enable-tls-sigs
 make -j$(nproc)
 # Copy fuzzers
-ls fuzz/fuzz* | grep -v "\." | while read i; do cp $i $OUT/; done
+ls fuzz/fuzz* | grep -v "\." | while read -r i; do cp "$i" "$OUT"/; done
 # Copy dictionaries
-cp fuzz/*.dict $OUT/
+cp fuzz/*.dict "$OUT"/
 # Copy seed corpus
-cp fuzz/*.zip $OUT/
+cp fuzz/*.zip "$OUT"/
 # Copy options
-cp fuzz/*.options $OUT/
+cp fuzz/*.options "$OUT"/
 # Copy configuration files
-cp example/protos.txt $OUT/
-cp example/categories.txt $OUT/
-cp example/risky_domains.txt $OUT/
-cp example/ja3_fingerprints.csv $OUT/
-cp example/sha1_fingerprints.csv $OUT/
-cp fuzz/ipv4_addresses.txt $OUT/
-cp fuzz/bd_param.txt $OUT/
-cp fuzz/splt_param.txt $OUT/
-cp fuzz/random_list.list $OUT/
-mkdir -p $OUT/lists
+cp example/protos.txt "$OUT"/
+cp example/categories.txt "$OUT"/
+cp example/risky_domains.txt "$OUT"/
+cp example/ja3_fingerprints.csv "$OUT"/
+cp example/sha1_fingerprints.csv "$OUT"/
+cp example/config.txt "$OUT"/
+cp lists/public_suffix_list.dat "$OUT"/
+cp fuzz/ipv*_addresses.txt "$OUT"/
+cp fuzz/bd_param.txt "$OUT"/
+cp fuzz/splt_param.txt "$OUT"/
+cp fuzz/random_list.list "$OUT"/
+mkdir -p "$OUT"/lists
 # Ignore a huge list to speed up init time
-find lists/*.list ! -name 100_malware.list -exec cp -t $OUT/lists/ {} +
+find lists/*.list ! -name 100_malware.list -exec cp -t "$OUT"/lists/ {} +

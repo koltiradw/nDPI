@@ -24,10 +24,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'cpp', 'python', 'ruby' ]
+        language: [ 'cpp', 'python' ]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Install Ubuntu Prerequisites
@@ -45,15 +45,15 @@ jobs:
           ./autogen.sh --enable-gprof --enable-option-checking=fatal --with-pcre2 --with-maxminddb --enable-tls-sigs --enable-debug-messages
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
 
       - name: Build nDPI library
         run: |
-          make
+          make -j
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{matrix.language}}"

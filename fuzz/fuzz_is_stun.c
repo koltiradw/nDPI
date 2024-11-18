@@ -4,6 +4,7 @@
 
 static struct ndpi_detection_module_struct *ndpi_struct = NULL;
 static struct ndpi_flow_struct ndpi_flow;
+struct ndpi_iphdr iph;
 #ifdef STUN_TCP
 struct ndpi_tcphdr tcph;
 #else
@@ -20,7 +21,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   struct ndpi_packet_struct *packet;
 
   if (ndpi_struct == NULL) {
-    fuzz_init_detection_module(&ndpi_struct);
+    fuzz_init_detection_module(&ndpi_struct, NULL);
   }
 
   packet = &ndpi_struct->packet;
@@ -31,6 +32,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 #else
   packet->tcp = &tcph;
 #endif
+  packet->iph = &iph; /* IPv4 only */
 
   is_stun(ndpi_struct, &ndpi_flow, &app_proto);
   return 0;

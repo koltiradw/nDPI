@@ -47,8 +47,7 @@ static size_t raknet_dissect_ip(struct ndpi_packet_struct * const packet, size_t
   return (packet->payload[offset] == 0x04 ? 4 : 16);
 }
 
-static int is_custom_version(struct ndpi_detection_module_struct *ndpi_struct,
-                             struct ndpi_flow_struct *flow)
+static int is_custom_version(struct ndpi_detection_module_struct *ndpi_struct)
 {
   struct ndpi_packet_struct *packet = &ndpi_struct->packet;
   unsigned char magic[] = { 0x00, 0xFF, 0xFF, 0x00, 0xFE, 0xFE, 0xFE, 0xFE,
@@ -104,7 +103,7 @@ static void ndpi_search_raknet(struct ndpi_detection_module_struct *ndpi_struct,
   */
   if (flow->packet_counter == 1)
   {
-    flow->l4.udp.raknet_custom = is_custom_version(ndpi_struct, flow);
+    flow->l4.udp.raknet_custom = is_custom_version(ndpi_struct);
   }
 
   if (packet->payload_packet_len < 7)
@@ -295,7 +294,9 @@ static void ndpi_search_raknet(struct ndpi_detection_module_struct *ndpi_struct,
         /* We've dissected enough to be sure. */
         if (frame_offset == packet->payload_packet_len)
         {
-          ndpi_int_raknet_add_connection(ndpi_struct, flow);
+          /* This packet might also be a RTP/RTCP one: give precedence to RTP/RTCP dissector */
+          if(flow->rtp_stage == 0 && flow->rtcp_stage == 0)
+            ndpi_int_raknet_add_connection(ndpi_struct, flow);
         } else {
           exclude_proto(ndpi_struct, flow);
         }
@@ -364,7 +365,9 @@ static void ndpi_search_raknet(struct ndpi_detection_module_struct *ndpi_struct,
 
         if (record_index == record_count && record_offset == packet->payload_packet_len)
         {
-          ndpi_int_raknet_add_connection(ndpi_struct, flow);
+          /* This packet might also be a RTP/RTCP one: give precedence to RTP/RTCP dissector */
+          if(flow->rtp_stage == 0 && flow->rtcp_stage == 0)
+            ndpi_int_raknet_add_connection(ndpi_struct, flow);
         } else {
           exclude_proto(ndpi_struct, flow);
         }

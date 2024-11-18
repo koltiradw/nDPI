@@ -14,13 +14,13 @@ jobs:
     name: Python Bindings (ubuntu-latest)
     runs-on: ubuntu-latest
     env:
-      CFLAGS: -Werror
+      CFLAGS: -Wextra -Werror
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Set up Python 3.9
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.9"
       - name: Install Ubuntu Prerequisites
@@ -30,7 +30,7 @@ jobs:
       - name: Build nDPI library
         run: |
           ./autogen.sh
-          make
+          make -j
           sudo make install
       - name: Generate Python bindings
         run: |
@@ -47,7 +47,7 @@ jobs:
     name: Test Utils (ubuntu-latest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Install Ubuntu Prerequisites
@@ -67,17 +67,17 @@ jobs:
           git diff-index --quiet HEAD -- || true
 
   test:
-    name: ${{ matrix.os }} ${{ matrix.arch }} ${{ matrix.gcrypt }} ${{ matrix.compiler }} ${{ matrix.pcre }} ${{ matrix.maxminddb }} ${{ matrix.msan }} ${{ matrix.nBPF }} ${{matrix.lto_gold_linker}}
+    name: ${{ matrix.os }} ${{ matrix.arch }} ${{ matrix.gcrypt }} ${{ matrix.compiler }} ${{ matrix.pcre }} ${{ matrix.maxminddb }} ${{ matrix.msan }} ${{ matrix.nBPF }} ${{matrix.lto_gold_linker}} ${{matrix.global_context}}
     runs-on: ${{ matrix.os }}
     env:
       CC: ${{ matrix.compiler }}
-      CFLAGS: -Werror
+      CFLAGS: -Wextra -Werror -DNDPI_EXTENDED_SANITY_CHECKS
     strategy:
       fail-fast: true
       matrix:
-        # ubuntu-latest == ubuntu-22.04
-        # macOS-latest == macos-12
-        os: ["ubuntu-latest", "ubuntu-20.04", "macOS-latest", "macos-11", "windows-latest"]
+        # macOS-latest == macos-14 on **ARM64**. Also macos-15 is on arm64
+        # There are some issues with external dependencies on macOS-14/15. Disable it for the time being
+        os: ["ubuntu-20.04", "ubuntu-22.04", "ubuntu-24.04", "macOS-13", "windows-latest"]
         arch: ["x86_64"]
         gcrypt: ["--with-local-libgcrypt", ""]
         compiler: ["cc"]
@@ -88,8 +88,9 @@ jobs:
         msan: [""]
         nBPF: [""]
         lto_gold_linker: [""]
+        global_context: [""] #Enable by default
         include:
-          - compiler: "gcc-7" # "Oldest" gcc easily available
+          - compiler: "gcc-4.9" # "Oldest" gcc easily available. To simulate RHEL7
             os: ubuntu-20.04
             arch: "x86_64"
             gcrypt: ""
@@ -97,8 +98,8 @@ jobs:
             maxminddb: "--with-maxminddb"
             msan: "--with-sanitizer"
             nBPF: ""
-          - compiler: "gcc-12" # "Newest" gcc easily available
-            os: ubuntu-22.04
+          - compiler: "gcc-14" # "Newest" gcc easily available
+            os: ubuntu-24.04
             arch: "x86_64"
             gcrypt: ""
             pcre: "--with-pcre2"
@@ -106,7 +107,7 @@ jobs:
             msan: "--with-sanitizer"
             nBPF: ""
             lto_gold_linker: "--with-lto-and-gold-linker"
-          - compiler: "clang-7" # "Oldest" clang easily available
+          - compiler: "clang-9" # "Oldest" clang easily available
             os: ubuntu-20.04
             arch: "x86_64"
             gcrypt: ""
@@ -114,10 +115,10 @@ jobs:
             maxminddb: "--with-maxminddb"
             msan: "--with-sanitizer"
             nBPF: ""
-          - compiler: "clang-14" # "Newest" clang easily available
-            ar: "llvm-ar-14"
-            ranlib: "llvm-ranlib-14"
-            os: ubuntu-22.04
+          - compiler: "clang-17" # "Newest" clang easily available. See also below...
+            ar: "llvm-ar-17"
+            ranlib: "llvm-ranlib-17"
+            os: ubuntu-24.04
             arch: "x86_64"
             gcrypt: ""
             pcre: "--with-pcre2"
@@ -125,6 +126,21 @@ jobs:
             msan: "--with-sanitizer"
             nBPF: ""
             lto_gold_linker: "--with-lto-and-gold-linker"
+          - compiler: "clang-18" # "The latest clang version easily available should be 18,
+                                 # but it is buggy on ubuntu-24.04 with LTO and Gold linker:
+                                 # https://github.com/llvm/llvm-project/issues/87553
+                                 # https://bugs.launchpad.net/ubuntu/+source/llvm-toolchain-18/+bug/2064187
+                                 # Waiting for a fix...
+            ar: "llvm-ar-18"
+            ranlib: "llvm-ranlib-18"
+            os: ubuntu-24.04
+            arch: "x86_64"
+            gcrypt: ""
+            pcre: "--with-pcre2"
+            maxminddb: "--with-maxminddb"
+            msan: "--with-sanitizer"
+            nBPF: ""
+            lto_gold_linker: ""
           - compiler: "cc"
             os: ubuntu-latest
             arch: "x86_64"
@@ -141,16 +157,25 @@ jobs:
             maxminddb: "--with-maxminddb"
             msan: "--with-sanitizer"
             nBPF: "nBPF"
-          - compiler: "clang-14"
+          - compiler: "cc"
+            os: ubuntu-latest
+            arch: "x86_64"
+            gcrypt: ""
+            pcre: "--with-pcre2"
+            maxminddb: "--with-maxminddb"
+            msan: "--with-sanitizer"
+            nBPF: ""
+            global_context: "--disable-global-context-support"
+          - compiler: "clang" #TODO: some issues with masan/clang/ubuntu-24.04
             os: ubuntu-22.04
             arch: "x86_64"
             gcrypt: ""
             pcre: "--with-pcre2"
             maxminddb: "--with-maxminddb"
-            msan: "--with-memory-sanitizer"
+            msan: "--with-memory-sanitizer --disable-memory-track-origins"
             nBPF: ""
           - compiler: "cc"
-            os: macOS-latest
+            os: macOS-13
             arch: "x86_64"
             gcrypt: ""
             pcre: "--with-pcre2"
@@ -158,11 +183,19 @@ jobs:
             msan: "" # Disable sanitizer on macos
             nBPF: ""
           - compiler: "cc"
-            os: macos-12
+            os: macos-14
             arch: "x86_64"
             gcrypt: ""
-            pcre: "--with-pcre2"
-            maxminddb: "--with-maxminddb"
+            pcre: ""
+            maxminddb: ""
+            msan: "" # Disable sanitizer on macos
+            nBPF: ""
+          - compiler: "cc"
+            os: macos-15
+            arch: "x86_64"
+            gcrypt: ""
+            pcre: ""
+            maxminddb: ""
             msan: "" # Disable sanitizer on macos
             nBPF: ""
           - compiler: "cc"
@@ -179,7 +212,7 @@ jobs:
             gcrypt: ""
             pcre: "--with-pcre2"
             maxminddb: "--with-maxminddb"
-            msan: "--with-sanitizer"
+            msan: ""
             nBPF: ""
           - compiler: "cc"
             os: ubuntu-latest
@@ -194,17 +227,19 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu') && !startsWith(matrix.arch, 'x86_64')
         run: |
           docker run --rm --privileged multiarch/qemu-user-static:register --reset
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
       - name: Install Ubuntu Prerequisites
         if: startsWith(matrix.os, 'ubuntu') && startsWith(matrix.arch, 'x86_64')
         run: |
           sudo apt-get update
-          sudo apt-get install autoconf automake libtool pkg-config gettext libjson-c-dev flex bison libpcap-dev
+          sudo apt-get install autoconf automake debhelper libtool pkg-config gettext libjson-c-dev flex bison libpcap-dev
+          sudo apt-get install rrdtool librrd-dev parallel
+      - name: Install Ubuntu Prerequisites [Mingw-w64] (runs only on ubuntu jobs)
+        if: startsWith(matrix.os, 'ubuntu') && startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.msan, '--with-') #Only on a few "standard" builds, without any sanitizers
+        run: |
           sudo apt-get install gcc-mingw-w64 libc6-dev
-          sudo apt-get install doxygen python3-sphinx python3-sphinx-rtd-theme python3-breathe python3-pip
-          sudo apt-get install rrdtool librrd-dev
       - name: Install Ubuntu Prerequisites (libgcrypt)
         if: startsWith(matrix.os, 'ubuntu') && startsWith(matrix.arch, 'x86_64') && startsWith(matrix.gcrypt, '--with-local-libgcrypt')
         run: |
@@ -226,8 +261,13 @@ jobs:
           make
           cd -
       - name: Setup Ubuntu specified compiler
-        if: startsWith(matrix.os, 'ubuntu') && startsWith(matrix.arch, 'x86_64') && ! startsWith(matrix.compiler, 'cc')
+        if: startsWith(matrix.os, 'ubuntu-20.04') && startsWith(matrix.arch, 'x86_64') && ! startsWith(matrix.compiler, 'cc')
         run: |
+          #For gcc-4.9 (on ubuntu-20.04)
+          echo "deb http://dk.archive.ubuntu.com/ubuntu/ xenial main" | sudo tee -a /etc/apt/sources.list
+          echo "deb http://dk.archive.ubuntu.com/ubuntu/ xenial universe" | sudo tee -a /etc/apt/sources.list
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 40976EAF437D05B5
+          sudo apt-get update
           sudo apt-get install ${{ matrix.compiler }}
       - name: Install Windows msys2 prerequisites
         if: startsWith(matrix.os, 'windows')
@@ -235,33 +275,16 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          install: git mingw-w64-x86_64-toolchain automake1.16 automake-wrapper autoconf libtool make mingw-w64-x86_64-json-c mingw-w64-x86_64-crt-git mingw-w64-x86_64-pcre mingw-w64-x86_64-libpcap
-      - name: Setup Windows msys2 prerequisites (libgcrypt)
-        if: startsWith(matrix.os, 'windows') && startsWith(matrix.gcrypt, '--with-local-libgcrypt')
-        run: |
-          msys2 -c 'git clone --branch libgpg-error-1.42 https://github.com/gpg/libgpg-error'
-          cd libgpg-error
-          msys2 -c './autogen.sh'
-          msys2 -c './configure -enable-maintainer-mode --enable-static --enable-shared --with-pic --disable-doc --disable-nls'
-          msys2 -c 'make'
-          msys2 -c 'make install'
-          msys2 -c 'cd ..'
-          msys2 -c 'rm -rf libgpg-error/'
-          msys2 -c 'git clone --branch libgcrypt-1.8.8 https://github.com/gpg/libgcrypt'
-          cd libgcrypt
-          msys2 -c './autogen.sh'
-          msys2 -c './configure -enable-maintainer-mode --enable-static --enable-shared --with-pic --disable-doc'
-          msys2 -c 'make'
-          msys2 -c 'make install'
-          msys2 -c 'cd ..'
-          msys2 -c 'rm -rf libgcrypt/'
-        env:
-          CC:
-          CFLAGS:
+          install: git mingw-w64-x86_64-toolchain automake1.16 automake-wrapper autoconf libtool make mingw-w64-x86_64-json-c mingw-w64-x86_64-crt-git mingw-w64-x86_64-pcre mingw-w64-x86_64-libpcap mingw-w64-x86_64-libgcrypt parallel
       - name: Installing MacOS prerequisites
         if: startsWith(matrix.os, 'macOS') && startsWith(matrix.arch, 'x86_64')
         run: |
-          brew install coreutils wdiff colordiff autoconf automake libtool pkg-config gettext json-c rrdtool
+          # A workaround for "The `brew link` step did not complete successfully" error.
+          # See https://github.com/Homebrew/homebrew-core/issues/165793#issuecomment-1991817938
+          find /usr/local/bin -lname '*/Library/Frameworks/Python.framework/*' -delete
+          sudo rm -rf /Library/Frameworks/Python.framework/
+          brew install --force python3 && brew unlink python3 && brew unlink python3 && brew link --overwrite python3
+          brew install coreutils wdiff colordiff autoconf automake libtool pkg-config gettext json-c rrdtool parallel
       - name: Install MacOS Prerequisites (libgcrypt)
         if: startsWith(matrix.os, 'macOS') && startsWith(matrix.arch, 'x86_64') && startsWith(matrix.gcrypt, '--with-local-libgcrypt')
         run: |
@@ -277,7 +300,7 @@ jobs:
       - name: Configure nDPI on Ubuntu
         if: startsWith(matrix.os, 'ubuntu') && startsWith(matrix.arch, 'x86_64')
         run: |
-          AR=${{ matrix.ar }} RANLIB=${{ matrix.ranlib }} ./autogen.sh --enable-option-checking=fatal --enable-debug-messages ${{ matrix.gcrypt }} ${{ matrix.msan }} ${{ matrix.pcre }} ${{ matrix.maxminddb }} --enable-tls-sigs ${{matrix.lto_gold_linker}}
+          AR=${{ matrix.ar }} RANLIB=${{ matrix.ranlib }} ./autogen.sh --enable-option-checking=fatal --enable-debug-messages ${{ matrix.gcrypt }} ${{ matrix.msan }} ${{ matrix.pcre }} ${{ matrix.maxminddb }} --enable-tls-sigs ${{matrix.lto_gold_linker}} ${{matrix.global_context}}
       - name: Configure nDPI on MacOS
         if: startsWith(matrix.os, 'macOS') && startsWith(matrix.arch, 'x86_64') && startsWith(matrix.compiler, 'cc')
         run: |
@@ -289,25 +312,32 @@ jobs:
       - name: Build nDPI on Windows msys2
         if: startsWith(matrix.os, 'windows') && startsWith(matrix.arch, 'x86_64') && startsWith(matrix.compiler, 'cc')
         run: |
-          msys2 -c 'make all'
+          msys2 -c 'make -j all'
           msys2 -c 'ldd ./example/ndpiReader.exe'
       - name: Build nDPI
-        if: startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.os, 'windows')
+        if: startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.os, 'windows') && !startsWith(matrix.os, 'macos-14') && !startsWith(matrix.os, 'macos-15')
         run: |
-          make all
+          make -j all
           make -C example ndpiSimpleIntegration
           make -C rrdtool
+      - name: Build nDPI (MacOS M1)
+        if: startsWith(matrix.os, 'macos-14') || startsWith(matrix.os, 'macos-15')
+        run: |
+          make -j all
+          make -C example ndpiSimpleIntegration
+          #There are somes issues with librrd
+          #make -C rrdtool
       - name: Print nDPI long help
         if: startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.os, 'windows')
         run: |
-          ./example/ndpiReader -H
+          cd ./example && ./ndpiReader -H
       - name: Install nDPI
         if: startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.os, 'windows')
         run: |
-          make install DESTDIR=$(realpath _install)
-          ls -alhHR _install
+          DESTDIR=/tmp/ndpi make install
+          ls -alhHR /tmp/ndpi
       - name: Test nDPI [SYMBOLS]
-        if: (startsWith(matrix.os, 'ubuntu') || startsWith(matrix.os, 'mac')) && startsWith(matrix.arch, 'x86_64')
+        if: startsWith(matrix.os, 'ubuntu') && startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.msan, '--with-') #Only on a few "standard" builds, without any sanitizers
         run: |
           ./utils/check_symbols.sh || { FAILED=$?; echo "::error file=${NDPI_LIB}::Unwanted libc symbols found: ${FAILED}. Please make sure to use only ndpi_malloc/ndpi_calloc/ndpi_realloc/ndpi_free wrapper instead of malloc/calloc/realloc/free."; false; }
         env:
@@ -315,10 +345,10 @@ jobs:
       - name: Test nDPI [DIFF]
         if: startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.os, 'windows')
         run: |
-          ./tests/do.sh
+          NDPI_FORCE_PARALLEL_UTESTS=1 NDPI_SKIP_PARALLEL_BAR=1 ./tests/do.sh
       - name: Test nDPI [UNIT]
         #Some issues with masan + json-c. Disable the test as workaround
-        if: startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.os, 'windows') && !startsWith(matrix.msan, '--with-memory-sanitizer')
+        if: startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.os, 'windows') && !startsWith(matrix.msan, '--with-memory-sanitizer') && !startsWith(matrix.os, 'macos-14') && !startsWith(matrix.os, 'macos-15')
         run: |
           ./tests/do-unit.sh
       - name: Test nDPI [DGA]
@@ -328,7 +358,7 @@ jobs:
       - name: Test nDPI [DIFF] (runs only on windows jobs)
         if: startsWith(matrix.arch, 'x86_64') && startsWith(matrix.os, 'windows')
         run: |
-          msys2 -c './tests/do.sh'
+          msys2 -c 'NDPI_FORCE_PARALLEL_UTESTS=1 NDPI_SKIP_PARALLEL_BAR=1 ./tests/do.sh'
       - name: Test nDPI [UNIT] (runs only on windows jobs)
         if: startsWith(matrix.arch, 'x86_64') && startsWith(matrix.os, 'windows')
         run: |
@@ -342,12 +372,19 @@ jobs:
         run: |
           make dist
           ./utils/verify_dist_tarball.sh
+      - name: Build Debian/Ubuntu package
+        if: startsWith(matrix.os, 'ubuntu-24.04') && startsWith(matrix.arch, 'x86_64') && startsWith(matrix.compiler, 'cc')
+        run: |
+          cd packages/ubuntu
+          ./configure --enable-no-sign
+          make
+          cd ../..
       - name: Build nDPI [Mingw-w64] (runs only on ubuntu jobs)
-        if: startsWith(matrix.os, 'ubuntu') && startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.nBPF, 'nBPF')
+        if: startsWith(matrix.os, 'ubuntu') && startsWith(matrix.arch, 'x86_64') && !startsWith(matrix.msan, '--with-') #Only on a few "standard" builds, without any sanitizers
         run: |
           make distclean
           ./autogen.sh --enable-option-checking=fatal --enable-debug-messages --enable-tls-sigs --host=x86_64-w64-mingw32
-          make all
+          make -j $(nproc) all
         env:
           CC:
       - name: Display qemu specified architecture (arm64 - little endian)
@@ -369,7 +406,7 @@ jobs:
             apt-get -y install git wdiff colordiff autoconf automake libtool pkg-config gettext libjson-c-dev flex bison libpcap-dev libgcrypt20-dev libpcre3-dev libmaxminddb-dev rrdtool librrd-dev &&
             git config --global --add safe.directory $(realpath .) &&
             env CC=gcc CFLAGS='-Werror' ./autogen.sh --enable-option-checking=fatal --enable-debug-messages ${{ matrix.gcrypt }} ${{ matrix.msan }} ${{ matrix.pcre }} ${{ matrix.maxminddb }} --enable-tls-sigs &&
-            make all &&
+            make -j all &&
             make -C example ndpiSimpleIntegration &&
             make -C rrdtool &&
             make check VERBOSE=1
@@ -393,7 +430,7 @@ jobs:
             apt-get -y install git wdiff colordiff autoconf automake libtool pkg-config gettext libjson-c-dev flex bison libpcap-dev libgcrypt20-dev libpcre3-dev libmaxminddb-dev rrdtool librrd-dev &&
             git config --global --add safe.directory $(realpath .) &&
             env CC=gcc CFLAGS='-Werror' ./autogen.sh --enable-option-checking=fatal --enable-debug-messages ${{ matrix.gcrypt }} ${{ matrix.msan }} ${{ matrix.pcre }} ${{ matrix.maxminddb }} --enable-tls-sigs &&
-            make all &&
+            make -j all &&
             make -C example ndpiSimpleIntegration &&
             make -C rrdtool &&
             make check VERBOSE=1
@@ -417,7 +454,7 @@ jobs:
             apt-get -y install git wdiff colordiff autoconf automake libtool pkg-config gettext libjson-c-dev flex bison libpcap-dev libgcrypt20-dev libpcre3-dev libmaxminddb-dev rrdtool librrd-dev &&
             git config --global --add safe.directory $(realpath .) &&
             env CC=gcc CFLAGS='-Werror' ./autogen.sh --enable-option-checking=fatal --enable-debug-messages ${{ matrix.gcrypt }} ${{ matrix.msan }} ${{ matrix.pcre }} ${{ matrix.maxminddb }} --enable-tls-sigs &&
-            make all &&
+            make -j all &&
             make -C example ndpiSimpleIntegration &&
             make -C rrdtool &&
             make check VERBOSE=1

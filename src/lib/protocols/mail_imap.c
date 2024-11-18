@@ -110,7 +110,7 @@ static void ndpi_search_mail_imap_tcp(struct ndpi_detection_module_struct *ndpi_
 	  if(flow->l4.tcp.mail_imap_starttls == 1) {
 	    NDPI_LOG_DBG2(ndpi_struct, "starttls detected\n");
 	    ndpi_int_mail_imap_add_connection(ndpi_struct, flow, NDPI_PROTOCOL_MAIL_IMAPS);
-	    if(ndpi_struct->opportunistic_tls_imap_enabled) {
+	    if(ndpi_struct->cfg.imap_opportunistic_tls_enabled) {
 	      NDPI_LOG_DBG(ndpi_struct, "Switching to [%d/%d]\n",
 			   flow->detected_protocol_stack[0], flow->detected_protocol_stack[1]);
 	      /* We are done (in IMAP dissector): delegating TLS... */
@@ -186,7 +186,7 @@ static void ndpi_search_mail_imap_tcp(struct ndpi_detection_module_struct *ndpi_
 
 	    snprintf(buf, sizeof(buf), "Found IMAP username (%s)",
 		     flow->l4.tcp.ftp_imap_pop_smtp.username);
-	    ndpi_set_risk(ndpi_struct, flow, NDPI_CLEAR_TEXT_CREDENTIALS, buf);
+	    ndpi_set_risk(flow, NDPI_CLEAR_TEXT_CREDENTIALS, buf);
 
 	    pwd = strtok_r(NULL, " \"\r\n", &saveptr);
 	    if(pwd) {

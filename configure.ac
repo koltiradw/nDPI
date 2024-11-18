@@ -1,4 +1,4 @@
-AC_INIT([libndpi],[4.9.0])
+AC_INIT([libndpi],[4.11.0])
 
 AC_CONFIG_AUX_DIR([.])
 AC_CONFIG_MACRO_DIR([m4])
@@ -29,6 +29,8 @@ AC_ARG_ENABLE(npcap, AS_HELP_STRING([--disable-npcap], [msys2 only: Disable link
 AC_ARG_WITH(nbpf-path, AS_HELP_STRING([--with-nbpf-path], [nBPF library custom path; default: ${PWD}/../PF_RING/userland/nbpf]),[NBPF_HOME=$withval],[NBPF_HOME=${PWD}/../PF_RING/userland/nbpf])
 AC_ARG_WITH(lto-and-gold-linker, AS_HELP_STRING([--with-lto-and-gold-linker], [Build with LTO and Gold linker]))
 AC_ARG_ENABLE(debug-build, AS_HELP_STRING([--enable-debug-build], [Enable debug build (`-g` flag)]),[enable_debugbuild=$enableval],[enable_debugbuild=no])
+AC_ARG_ENABLE(global-context-support, AS_HELP_STRING([--disable-global-context-support], [Disable support for global context. No external dependency on libpthread]))
+AC_ARG_ENABLE(memory-track-origins, AS_HELP_STRING([--disable-memory-track-origins], [Don't add -fsanitize-memory-track-origins flag when compiling with MASAN support. Useful for faster CI]))
 
 NDPI_CFLAGS="${NDPI_CFLAGS} -D_DEFAULT_SOURCE=1 -D_GNU_SOURCE=1"
 
@@ -64,8 +66,14 @@ AS_IF([test "${with_sanitizer+set}" = set -o "${with_thread_sanitizer+set}" = se
 ])
 
 AS_IF([test "${with_sanitizer+set}" = set],[
-  NDPI_CFLAGS="${NDPI_CFLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize=leak -fno-omit-frame-pointer"
-  NDPI_LDFLAGS="${NDPI_LDFLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize=leak"
+  NDPI_CFLAGS="${NDPI_CFLAGS} -fsanitize=address -fsanitize=undefined -fsanitize=leak -fno-omit-frame-pointer"
+  NDPI_LDFLAGS="${NDPI_LDFLAGS} -fsanitize=address -fsanitize=undefined -fsanitize=leak"
+  #Sanitizers should work on any compilers that we support (or that we test on CI, at least)
+  #Exception: "-fsanitize=alignment" is not supported in gcc 4.9
+  AX_CHECK_COMPILE_FLAG([-fno-sanitize=alignment], [
+    NDPI_CFLAGS="${NDPI_CFLAGS} -fno-sanitize=alignment"
+    NDPI_LDFLAGS="${NDPI_LDFLAGS} -fno-sanitize=alignment"
+  ])
 ])
 
 AS_IF([test "${with_thread_sanitizer+set}" = set],[
@@ -74,7 +82,10 @@ AS_IF([test "${with_thread_sanitizer+set}" = set],[
 ])
 
 AS_IF([test "${with_memory_sanitizer+set}" = set],[
-  NDPI_CFLAGS="${NDPI_CFLAGS} -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer"
+  NDPI_CFLAGS="${NDPI_CFLAGS} -fsanitize=memory -fno-omit-frame-pointer"
+  AS_IF([test "x$enable_memory_track_origins" != "xno"], [
+    NDPI_CFLAGS="${NDPI_CFLAGS} -fsanitize-memory-track-origins"
+  ])
   NDPI_LDFLAGS="${NDPI_LDFLAGS} -fsanitize=memory"
 ])
 
@@ -113,6 +124,29 @@ AC_CHECK_TOOL(AR, ar, [false])
 
 AC_LANG_WERROR
 
+AC_MSG_CHECKING([whether roaring v3 works])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+	    #if __has_include (<stdio.h>)
+	    #endif
+	    ]])],
+	    [
+	      AC_MSG_RESULT([yes])
+	      ],
+	      [
+	        AC_MSG_RESULT([no])
+		  AC_DEFINE_UNQUOTED(USE_ROARING_V2, "1", [Use CRoaring 2.1.x])
+  ])
+
+GCC_VERSION=`gcc --version | cut -d ' ' -f 3 | head -1|cut -d '.' -f 1`
+if test "${GCC_VERSION}" == "version" ; then
+  GCC_VERSION=`gcc --version | cut -d ' ' -f 4 | head -1|cut -d '.' -f 1`
+fi
+
+if test "${GCC_VERSION}" -lt "7" ; then
+ AC_DEFINE_UNQUOTED(USE_ROARING_V2, "1", [Use CRoaring 2.1.x])
+fi
+
+
 NDPI_MAJOR=`echo "${PACKAGE_VERSION}" | cut -d . -f 1`
 NDPI_MINOR=`echo "${PACKAGE_VERSION}" | cut -d . -f 2`
 NDPI_PATCH=`echo "${PACKAGE_VERSION}" | cut -d . -f 3`
@@ -125,8 +159,8 @@ AC_DEFINE_UNQUOTED(NDPI_PATCH_LEVEL,   "${NDPI_PATCH}", [nDPI patch level])
 # .git as directory in a cloned repo
 # .git as file in submodule based integration
 if test -d ".git" || test -r ".git"; then
-     GIT_TAG=`git log -1 --format=%h`
-     GIT_DATE=`git log -1 --format=%cd`
+     GIT_TAG=`git log -1 --abbrev=7 --format=%h`
+     GIT_DATE=`git log -1 --abbrev=7 --format=%cd`
      #
      # On CentOS 6 `git rev-list HEAD --count` does not work
      #
@@ -171,12 +205,19 @@ if ! test "${with_only_libndpi+set}" = set; then :
         JSONC_LIBS=""
         JSONC_CFLAGS=""
     ])
-    AX_PTHREAD([],[
-        AC_MSG_WARN([POSIX Threads not available. Building library only.])
-        JSONC_LIBS=""
-        JSONC_CFLAGS=""
-        EXTRA_TARGETS=""
-    ])
+    dnl> AX_PTHREAD test does not work along with MingW/MSYS anymore
+    case "$host" in
+      *-*-mingw32*|*-*-msys)
+      ;;
+      *)
+        AX_PTHREAD([],[
+            AC_MSG_WARN([POSIX Threads not available. Building library only.])
+            JSONC_LIBS=""
+            JSONC_CFLAGS=""
+            EXTRA_TARGETS=""
+        ])
+      ;;
+    esac
 fi
 AM_CONDITIONAL([BUILD_UNITTESTS], [test "x$build_unittests" = "xyes"])
 
@@ -185,9 +226,7 @@ AS_IF([test "x${enable_tls_sigs}" = "xyes"],[
   HANDLE_TLS_SIGS=""
 ])
 
-NDPI_CFLAGS="-W -Wall -Wno-unused-parameter -Wno-unused-function -Wno-address-of-packed-member ${NDPI_CFLAGS} -Wno-attributes"
-#Workaround for RoaringBitmap with gcc-7
-NDPI_CFLAGS="-Wno-attributes ${NDPI_CFLAGS}"
+NDPI_CFLAGS="-W -Wall -Wno-address-of-packed-member ${NDPI_CFLAGS}"
 
 AS_IF([test "${with_lto_and_gold_linker+set}" = set], [
        NDPI_CFLAGS="${NDPI_CFLAGS} -flto -fuse-ld=gold -Wno-unused-command-line-argument"
@@ -202,6 +241,13 @@ if test "x$ac_cv_lib_rrd_rrd_fetch_r" = xyes; then :
    AC_DEFINE_UNQUOTED(HAVE_RRDTOOL, "1", [rrdtool is present])
    EXTRA_TARGETS="$EXTRA_TARGETS rrdtool"
 fi
+
+GLOBAL_CONTEXT_ENABLED=0
+AS_IF([test "x$enable_global_context_support" != "xno"], [
+  AC_CHECK_LIB([pthread], [pthread_mutex_init])
+  NDPI_CFLAGS="${NDPI_CFLAGS} -DUSE_GLOBAL_CONTEXT"
+  GLOBAL_CONTEXT_ENABLED=1
+])
 
 ADDITIONAL_INCS=
 ADDITIONAL_LIBS="$LIBM"
@@ -422,6 +468,7 @@ AC_SUBST(GPROF_ENABLED)
 AC_SUBST(USE_HOST_LIBGCRYPT)
 AC_SUBST(PCRE2_ENABLED)
 AC_SUBST(NBPF_ENABLED)
+AC_SUBST(GLOBAL_CONTEXT_ENABLED)
 AC_SUBST(HANDLE_TLS_SIGS)
 AC_SUBST(DISABLE_NPCAP)
 AC_SUBST(EXE_SUFFIX)

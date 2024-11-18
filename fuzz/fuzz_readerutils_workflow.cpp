@@ -8,33 +8,33 @@
 
 extern u_int8_t enable_doh_dot_detection;
 
-char *_debug_protocols;
-int nDPI_LogLevel = 0;
-u_int32_t current_ndpi_memory = 0, max_ndpi_memory = 0;
-u_int8_t enable_protocol_guess = 1, enable_payload_analyzer = 0;
+u_int8_t enable_payload_analyzer = 0;
 u_int8_t enable_flow_stats = 0;
 u_int8_t human_readeable_string_len = 5;
 u_int8_t max_num_udp_dissected_pkts = 16 /* 8 is enough for most protocols, Signal requires more */, max_num_tcp_dissected_pkts = 80 /* due to telnet */;
-ndpi_init_prefs init_prefs = ndpi_track_flow_payload | ndpi_enable_ja3_plus | ndpi_enable_tcp_ack_payload_heuristic;
-int enable_malloc_bins = 0;
 int malloc_size_stats = 0;
-int max_malloc_bins = 14;
-struct ndpi_bin malloc_bins; /* unused */
+FILE *fingerprint_fp = NULL;
+bool do_load_lists = false;
+char *addr_dump_path = NULL;
+int monitoring_enabled = 0;
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   FuzzedDataProvider fuzzed_data(data, size);
   ndpi_workflow *w;
+  struct ndpi_global_context *g_ctx;
   struct ndpi_workflow_prefs prefs;
   pcap_t *pcap_handle;
   ndpi_serialization_format serialization_format;
   NDPI_PROTOCOL_BITMASK enabled_bitmask;
   ndpi_risk flow_risk;
+  struct ndpi_flow_info *flow = NULL; /* unused */
   const u_char *pkt;
   struct pcap_pkthdr *header;
   int r, rc;
   char errbuf[PCAP_ERRBUF_SIZE];
   FILE *fd;
   u_int8_t debug_protos_index;
+  char *_debug_protocols;
   const char *strs[] = { "all",
 			 "dns,quic",
 			 "+dns:-quic",
@@ -88,7 +88,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     return 0;
   }
 
-  w = ndpi_workflow_init(&prefs, pcap_handle, 1, serialization_format);
+  g_ctx = ndpi_global_init();
+
+  w = ndpi_workflow_init(&prefs, pcap_handle, 1, serialization_format, g_ctx);
   if(w) {
     NDPI_BITMASK_SET_ALL(enabled_bitmask);
     rc = ndpi_set_protocol_detection_bitmask2(w->ndpi_struct, &enabled_bitmask);
@@ -98,7 +100,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       header = NULL;
       r = pcap_next_ex(pcap_handle, &header, &pkt);
       while (r > 0) {
-        ndpi_workflow_process_packet(w, header, pkt, &flow_risk);
+        ndpi_workflow_process_packet(w, header, pkt, &flow_risk, &flow);
         r = pcap_next_ex(pcap_handle, &header, &pkt);
       }
     }
@@ -106,6 +108,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     ndpi_workflow_free(w);
   }
   pcap_close(pcap_handle);
+
+  ndpi_global_deinit(g_ctx);
 
   ndpi_free(_debug_protocols);
 

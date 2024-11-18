@@ -21,7 +21,6 @@
 
 
 static ndpi_network ndpi_protocol_skype_teams_protocol_list[] = {
- { 0x0D6B4000 /* 13.107.64.0/18 */, 18, NDPI_PROTOCOL_SKYPE_TEAMS },
  { 0x34700000 /* 52.112.0.0/14 */, 14, NDPI_PROTOCOL_SKYPE_TEAMS },
  { 0x347A0000 /* 52.122.0.0/15 */, 15, NDPI_PROTOCOL_SKYPE_TEAMS },
  { 0x34EE778D /* 52.238.119.141/32 */, 32, NDPI_PROTOCOL_SKYPE_TEAMS },
@@ -36,8 +35,8 @@ static ndpi_network6 ndpi_protocol_skype_teams_protocol_list_6[] = {
  { "2603:1047::", 48, NDPI_PROTOCOL_SKYPE_TEAMS },
  { "2603:1057::", 48, NDPI_PROTOCOL_SKYPE_TEAMS },
  { "2603:1063::", 38, NDPI_PROTOCOL_SKYPE_TEAMS },
- { "2620:1ec:40::", 42, NDPI_PROTOCOL_SKYPE_TEAMS },
  { "2620:1ec:6::", 48, NDPI_PROTOCOL_SKYPE_TEAMS },
+ { "2620:1ec:40::", 42, NDPI_PROTOCOL_SKYPE_TEAMS },
  /* End */
  { NULL, 0, 0 }
 };

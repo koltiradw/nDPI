@@ -42,6 +42,14 @@ static void ndpi_search_viber(struct ndpi_detection_module_struct *ndpi_struct, 
   
   NDPI_LOG_DBG(ndpi_struct, "search for Viber\n");
 
+  if(packet->udp && packet->iph) {
+    /* ignore broadcast as this isn't viber */
+    if((packet->iph->saddr == 0xFFFFFFFF) || (packet->iph->daddr == 0xFFFFFFFF)) {
+      NDPI_EXCLUDE_PROTO(ndpi_struct, flow);
+      return;
+    }
+  }
+
   if (packet->tcp != NULL)
   {
     NDPI_LOG_DBG2(ndpi_struct, "searching Viber over tcp\n");
@@ -70,13 +78,13 @@ static void ndpi_search_viber(struct ndpi_detection_module_struct *ndpi_struct, 
   if((packet->udp != NULL) && (packet->payload_packet_len > 5)) {
     NDPI_LOG_DBG2(ndpi_struct, "calculating dport over udp\n");
 
-    if((packet->payload[2] == 0x03 && packet->payload[3] == 0x00)
-       || (packet->payload_packet_len == 20 && packet->payload[2] == 0x09 && packet->payload[3] == 0x00)
-       || (packet->payload[2] == 0x01 && packet->payload[3] == 0x00 && packet->payload[4] == 0x05 && packet->payload[5] == 0x00)
-       || (packet->payload_packet_len == 34 && packet->payload[2] == 0x19 && packet->payload[3] == 0x00)
-       || (packet->payload_packet_len == 34 && packet->payload[2] == 0x1b && packet->payload[3] == 0x00)
-       )
-    {
+    if((flow->rtp_stage == 0) && (flow->rtcp_stage == 0) /* Avoid collisions with RTP/RTCP */ &&
+       ((packet->payload[2] == 0x03 && packet->payload[3] == 0x00)
+        || (packet->payload_packet_len == 20 && packet->payload[2] == 0x09 && packet->payload[3] == 0x00)
+        || (packet->payload[2] == 0x01 && packet->payload[3] == 0x00 && packet->payload[4] == 0x05 && packet->payload[5] == 0x00)
+        || (packet->payload_packet_len == 34 && packet->payload[2] == 0x19 && packet->payload[3] == 0x00)
+        || (packet->payload_packet_len == 34 && packet->payload[2] == 0x1b && packet->payload[3] == 0x00)
+       )) {
       viber_add_connection(ndpi_struct, flow);
       return;
     }

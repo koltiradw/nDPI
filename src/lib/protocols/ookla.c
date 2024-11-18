@@ -30,12 +30,12 @@ const u_int16_t ookla_port = 8080;
 
 /* ************************************************************* */
 
-static u_int32_t get_ookla_key(struct ndpi_flow_struct *flow)
+static u_int64_t get_ookla_key(struct ndpi_flow_struct *flow)
 {
   if(flow->is_ipv6)
-    return ndpi_quick_hash(flow->c_address.v6, 16);
+    return ndpi_quick_hash64((const char *)flow->c_address.v6, 16);
   else
-    return ntohl(flow->c_address.v4);
+    return flow->c_address.v4;
 }
 
 /* ************************************************************* */
@@ -43,24 +43,26 @@ static u_int32_t get_ookla_key(struct ndpi_flow_struct *flow)
 int ookla_search_into_cache(struct ndpi_detection_module_struct *ndpi_struct,
                             struct ndpi_flow_struct *flow)
 {
-  u_int32_t key;
+  u_int64_t key;
   u_int16_t dummy;
 
   if(ndpi_struct->ookla_cache) {
     key = get_ookla_key(flow);
-#ifdef DEBUG_OOKLA_LRU
-    printf("[LRU OOKLA] Search %u\n", key);
-#endif
 
     if(ndpi_lru_find_cache(ndpi_struct->ookla_cache, key,
                            &dummy, 0 /* Don't remove it as it can be used for other connections */,
 			   ndpi_get_current_time(flow))) {
 #ifdef DEBUG_OOKLA_LRU
-      printf("[LRU OOKLA] Found\n");
+      printf("[LRU OOKLA] Found %lu [%u <-> %u]\n", key, ntohs(flow->c_port), ntohs(flow->s_port));
 #endif
       return 1;
-    }
+    } else {
+#ifdef DEBUG_OOKLA_LRU
+      printf("[LRU OOKLA] Not found %lu [%u <-> %u]\n", key, ntohs(flow->c_port), ntohs(flow->s_port));
+#endif
+    }      
   }
+  
   return 0;
 }
 
@@ -69,12 +71,12 @@ int ookla_search_into_cache(struct ndpi_detection_module_struct *ndpi_struct,
 void ookla_add_to_cache(struct ndpi_detection_module_struct *ndpi_struct,
                         struct ndpi_flow_struct *flow)
 {
-  u_int32_t key;
+  u_int64_t key;
 
   if(ndpi_struct->ookla_cache) {
     key = get_ookla_key(flow);
 #ifdef DEBUG_OOKLA_LRU
-    printf("[LRU OOKLA] ADDING %u\n", key);
+    printf("[LRU OOKLA] ADDING %lu [%u <-> %u]\n", key, ntohs(flow->c_port), ntohs(flow->s_port));
 #endif
     ndpi_lru_add_to_cache(ndpi_struct->ookla_cache, key, 1 /* dummy */,
                           ndpi_get_current_time(flow));
@@ -100,6 +102,7 @@ void ndpi_search_ookla(struct ndpi_detection_module_struct* ndpi_struct, struct 
     flow->ookla_stage = 1;
     return;
   }
+  
   if(flow->packet_counter == 2 &&
      flow->ookla_stage == 1 &&
      packet->payload_packet_len >= NDPI_STATICSTRING_LEN("HELLO") &&

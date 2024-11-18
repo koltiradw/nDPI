@@ -2,7 +2,7 @@
  * rdp.c
  *
  * Copyright (C) 2009-11 - ipoque GmbH
- * Copyright (C) 2011-22 - ntop.org
+ * Copyright (C) 2011-24 - ntop.org
  *
  * This file is part of nDPI, an open source deep packet inspection
  * library based on the OpenDPI and PACE technology by ipoque GmbH
@@ -32,30 +32,84 @@
 #include "ndpi_api.h"
 #include "ndpi_private.h"
 
+extern int ndpi_tls_obfuscated_heur_search_again(struct ndpi_detection_module_struct* ndpi_struct,
+						 struct ndpi_flow_struct* flow);
+
+/* **************************************** */
+
 static void ndpi_int_rdp_add_connection(struct ndpi_detection_module_struct *ndpi_struct,
 					struct ndpi_flow_struct *flow) {
   NDPI_LOG_INFO(ndpi_struct, "found RDP\n");
   ndpi_set_detected_protocol(ndpi_struct, flow, NDPI_PROTOCOL_RDP, NDPI_PROTOCOL_UNKNOWN, NDPI_CONFIDENCE_DPI);
-  ndpi_set_risk(ndpi_struct, flow, NDPI_DESKTOP_OR_FILE_SHARING_SESSION, "Found RDP"); /* Remote assistance */
+  ndpi_set_risk(flow, NDPI_DESKTOP_OR_FILE_SHARING_SESSION, "Found RDP"); /* Remote assistance */
 }
+
+/* **************************************** */
+
+/* tls.c */
+extern int ndpi_search_tls_tcp(struct ndpi_detection_module_struct *ndpi_struct,
+			       struct ndpi_flow_struct *flow);
+
+int ndpi_search_tls_over_rdp(struct ndpi_detection_module_struct *ndpi_struct,
+			     struct ndpi_flow_struct *flow) {
+  const struct ndpi_packet_struct * const packet = &ndpi_struct->packet;
+  
+  if((packet->payload_packet_len > 1)
+     && (packet->payload[0] == 0x16 /* This might be a TLS block */)) {
+    int rc = ndpi_search_tls_tcp(ndpi_struct, flow);
+
+    return(rc);
+  } else
+    return 1; /* Keep searching */
+}
+
+/* **************************************** */
 
 static void ndpi_search_rdp(struct ndpi_detection_module_struct *ndpi_struct,
 			    struct ndpi_flow_struct *flow) {
-  struct ndpi_packet_struct *packet = &ndpi_struct->packet;
+  const struct ndpi_packet_struct * const packet = &ndpi_struct->packet;
 	
   NDPI_LOG_DBG(ndpi_struct, "search RDP\n");
 
   if (packet->tcp != NULL) {
-    if (packet->payload_packet_len > 10
-	&& get_u_int8_t(packet->payload, 0) > 0
-	&& get_u_int8_t(packet->payload, 0) < 4 && get_u_int16_t(packet->payload, 2) == ntohs(packet->payload_packet_len)
-	&& get_u_int8_t(packet->payload, 4) == packet->payload_packet_len - 5
-	&& get_u_int8_t(packet->payload, 5) == 0xe0
-	&& get_u_int16_t(packet->payload, 6) == 0 && get_u_int16_t(packet->payload, 8) == 0 && get_u_int8_t(packet->payload, 10) == 0) {
-      ndpi_int_rdp_add_connection(ndpi_struct, flow);
-      return;
-    }
+    if(packet->payload_packet_len > 13 &&
+       tpkt_verify_hdr(packet) &&
+       /* COTP */
+       packet->payload[4] == packet->payload_packet_len - 5) {
 
+      if(current_pkt_from_client_to_server(ndpi_struct, flow)) {
+        if(packet->payload[5] == 0xE0 && /* COTP CR */
+	   ((packet->payload[11] == 0x01 && /* RDP Negotiation Request */
+             packet->payload[13] == 0x08 /* RDP Length */) ||
+	    (packet->payload_packet_len > 17 &&
+	     memcmp(&packet->payload[11], "Cookie:", 7) == 0))) /* RDP Cookie */ {
+
+	  if(packet->payload_packet_len > 43) {
+	    u_int8_t rdp_requested_proto = packet->payload[43];
+
+	    /* Check if TLS support has been requested in RDP */
+	    if((rdp_requested_proto & 0x1) == 0x1) {
+	      /* RDP Response + Client Hello + Server hello */
+	      flow->max_extra_packets_to_check = 5;
+	      
+	      flow->extra_packets_func = ndpi_search_tls_over_rdp;
+	    }
+	  }
+	  
+          ndpi_int_rdp_add_connection(ndpi_struct, flow);
+
+          return;
+	}
+      } else {
+        /* Asymmetric detection via RDP Negotiation Response */
+        if(packet->payload[5] == 0xD0 && /* COTP CC */
+	   packet->payload[11] == 0x02 && /* RDP Negotiation Response */
+           packet->payload[13] == 0x08 /* RDP Length */) {
+          ndpi_int_rdp_add_connection(ndpi_struct, flow);
+	  return;
+	}
+      }
+    }
     NDPI_EXCLUDE_PROTO(ndpi_struct, flow);
   } else if(packet->udp != NULL) {
     u_int16_t s_port = ntohs(packet->udp->source);
@@ -125,6 +179,7 @@ static void ndpi_search_rdp(struct ndpi_detection_module_struct *ndpi_struct,
   }
 }
 
+/* **************************************** */
 
 void init_rdp_dissector(struct ndpi_detection_module_struct *ndpi_struct, u_int32_t *id)
 {

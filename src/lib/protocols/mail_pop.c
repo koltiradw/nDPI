@@ -88,7 +88,7 @@ static int ndpi_int_mail_pop_check_for_client_commands(struct ndpi_detection_mod
 
       snprintf(buf, sizeof(buf), "Found username (%s)",
 	       flow->l4.tcp.ftp_imap_pop_smtp.username);
-      ndpi_set_risk(ndpi_struct, flow, NDPI_CLEAR_TEXT_CREDENTIALS, buf);
+      ndpi_set_risk(flow, NDPI_CLEAR_TEXT_CREDENTIALS, buf);
       
       flow->l4.tcp.pop_command_bitmask |= POP_BIT_USER;
       return 1;
@@ -100,7 +100,7 @@ static int ndpi_int_mail_pop_check_for_client_commands(struct ndpi_detection_mod
 				 sizeof(flow->l4.tcp.ftp_imap_pop_smtp.password), 5,
 				 packet->payload, packet->payload_packet_len);
 
-      ndpi_set_risk(ndpi_struct, flow, NDPI_CLEAR_TEXT_CREDENTIALS, "Found password");
+      ndpi_set_risk(flow, NDPI_CLEAR_TEXT_CREDENTIALS, "Found password");
       flow->l4.tcp.pop_command_bitmask |= POP_BIT_PASS;
       return 1;
     } else if((packet->payload[0] == 'C' || packet->payload[0] == 'c')
@@ -174,7 +174,7 @@ static void ndpi_search_mail_pop_tcp(struct ndpi_detection_module_struct
     if(packet->payload[0] == '+' && flow->l4.tcp.mail_imap_starttls == 1) {
       NDPI_LOG_DBG2(ndpi_struct, "starttls detected\n");
       ndpi_int_mail_pop_add_connection(ndpi_struct, flow, NDPI_PROTOCOL_MAIL_POPS);
-      if(ndpi_struct->opportunistic_tls_pop_enabled) {
+      if(ndpi_struct->cfg.pop_opportunistic_tls_enabled) {
         NDPI_LOG_DBG(ndpi_struct, "Switching to [%d/%d]\n",
 		     flow->detected_protocol_stack[0], flow->detected_protocol_stack[1]);
 	/* We are done (in POP dissector): delegating TLS... */

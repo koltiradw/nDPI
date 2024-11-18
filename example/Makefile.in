@@ -1,6 +1,9 @@
 AR=@AR@
 CC=@CC@
 CXX=@CXX@
+ifneq ($(OS),Windows_NT)
+OS := $(shell uname)
+endif
 ifeq ($(OS),Darwin)
 CC=clang -fno-color-diagnostics
 endif
@@ -12,7 +15,7 @@ SRCHOME=../src
 ifneq ($(OS),Windows_NT)
 CFLAGS+=-fPIC -DPIC
 endif
-CFLAGS+=-I$(SRCHOME)/include @NDPI_CFLAGS@ @PCAP_INC@ @GPROF_CFLAGS@
+CFLAGS+=-I$(SRCHOME)/include @NDPI_CFLAGS@ @PCAP_INC@ @GPROF_CFLAGS@ @CUSTOM_NDPI@
 LDFLAGS+=@NDPI_LDFLAGS@
 LIBNDPI=$(SRCHOME)/lib/libndpi.a
 LIBS=$(LIBNDPI) @PCAP_LIB@ @ADDITIONAL_LIBS@ @LIBS@ @GPROF_LIBS@

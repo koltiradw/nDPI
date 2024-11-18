@@ -43,7 +43,7 @@ typedef __kernel_size_t size_t;
 #include "ndpi_api.h"
 #include "ahocorasick.h"
 
-#include "../../ndpi_replace_printf.h"
+#include "../../../include/ndpi_replace_printf.h"
 
 /* TODO: For different depth of node, number of outgoing edges differs
    considerably, It is efficient to use different chunk size for 
@@ -335,7 +335,7 @@ AC_ERROR_t ac_automata_walk(AC_AUTOMATA_t * thiz,
     }
 
     path[ip].idx = i+1;
-    if(ip >= AC_PATTRN_MAX_LENGTH)
+    if(ip > AC_PATTRN_MAX_LENGTH)
         continue;
 
     ip++;

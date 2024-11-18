@@ -22,6 +22,9 @@ static void __free(void * const node)
 }
 static void __walk(const void *a, ndpi_VISIT which, int depth, void *user_data)
 {
+  (void)which;
+  (void)depth;
+
   assert(user_data == NULL && a);
 }
 
@@ -46,7 +49,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     *entry = fuzzed_data.ConsumeIntegral<u_int32_t>();
     
     if(ndpi_tfind(entry, &root, __compare) == NULL) {
-      if(ndpi_tsearch(entry, &root, __compare) == NULL) {
+      if(ndpi_tsearch(entry, fuzzed_data.ConsumeBool() ? &root : NULL, __compare) == NULL) {
         ndpi_free(entry);
       } else {
         /* Keep one random entry really added */
@@ -65,7 +68,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   for (i = 0; i < num_iteration; i++) {
     e = fuzzed_data.ConsumeIntegral<u_int32_t>();
 
-    ndpi_tfind(&e, &root, __compare);
+    ndpi_tfind(&e, fuzzed_data.ConsumeBool() ? &root : NULL, __compare);
   }
   /* Search of an added node */
   if (is_added) {

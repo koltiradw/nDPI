@@ -25,27 +25,50 @@
 #include "ndpi_api.h"
 #include "ndpi_private.h"
 
+enum ether_disc_packet_type {
+  DISC_PING = 0x01,
+  DISC_PONG = 0x02,
+  DISC_FINDNODE = 0x03,
+  DISC_NEIGHBOURS = 0x04,
+  DISC_ENRREQUEST = 0x05,
+  DISC_ENRRESPONSE = 0x06
+};
 
-/* ************************************************************************** */
-
-static u_int32_t ndpi_ether_make_lru_cache_key(struct ndpi_flow_struct *flow) {
-  u_int32_t key;
-
-  /* network byte order */
-  if(flow->is_ipv6)
-    key = ndpi_quick_hash(flow->c_address.v6, 16) + ndpi_quick_hash(flow->s_address.v6, 16);
-  else
-    key = flow->c_address.v4 + flow->s_address.v4;
-
-  return key;
-}
 
 /* ************************************************************************** */
 
 static void ndpi_ether_cache_connection(struct ndpi_detection_module_struct *ndpi_struct,
 				 struct ndpi_flow_struct *flow) {
   if(ndpi_struct->mining_cache)
-    ndpi_lru_add_to_cache(ndpi_struct->mining_cache, ndpi_ether_make_lru_cache_key(flow), NDPI_PROTOCOL_ETHEREUM, ndpi_get_current_time(flow));
+    ndpi_lru_add_to_cache(ndpi_struct->mining_cache, mining_make_lru_cache_key(flow), NDPI_PROTOCOL_ETHEREUM, ndpi_get_current_time(flow));
+}
+
+/* ************************************************************************** */
+
+/*
+* https://github.com/ethereum/devp2p/blob/master/discv4.md
+*/
+static bool ndpi_ether_is_discv4(const struct ndpi_packet_struct *packet) {
+  u_int16_t source = ntohs(packet->udp->source);
+  u_int16_t dest = ntohs(packet->udp->dest);
+  if((packet->payload_packet_len > 98)
+   && (packet->payload_packet_len < 1280)
+   && ((source == 30303) || (dest == 30303)) /*one way to remove default port is to compute packet hash and use it for verification*/
+   ) {
+    uint8_t packet_type = packet->payload[97];
+    switch(packet_type) {
+    case DISC_PING:
+    case DISC_PONG:
+    case DISC_FINDNODE:
+    case DISC_NEIGHBOURS:
+    case DISC_ENRREQUEST:
+    case DISC_ENRRESPONSE:
+      return true;
+    default:
+      return false;
+    }
+  }
+  return false;
 }
 
 /* ************************************************************************** */
@@ -53,31 +76,16 @@ static void ndpi_ether_cache_connection(struct ndpi_detection_module_struct *ndp
 static void ndpi_search_ethereum_udp(struct ndpi_detection_module_struct *ndpi_struct,
 				   struct ndpi_flow_struct *flow) {
   struct ndpi_packet_struct *packet = &ndpi_struct->packet;
-  u_int16_t source = ntohs(packet->udp->source);
-  u_int16_t dest = ntohs(packet->udp->dest);
 
   NDPI_LOG_DBG(ndpi_struct, "search ETHEREUM UDP\n");
-
-  /* 
-     Ethereum P2P Discovery Protocol
-     https://github.com/ConsenSys/ethereum-dissectors/blob/master/packet-ethereum-disc.c
-  */
-  if((packet->payload_packet_len > 98)
-     && (packet->payload_packet_len < 1280)
-     && ((source == 30303) || (dest == 30303))
-     && (packet->payload[97] <= 0x04 /* NODES */)
-     ) {
-    if((packet->iph) && ((ntohl(packet->iph->daddr) & 0xFF000000 /* 255.0.0.0 */) == 0xFF000000))
-      ;
-    else if(packet->iphv6 && ntohl(packet->iphv6->ip6_dst.u6_addr.u6_addr32[0]) == 0xFF020000)
-      ;
-    else {
+  if((packet->iph && ((ntohl(packet->iph->daddr) & 0xFF000000) != 0xFF000000 /* 255.0.0.0 */))
+      ||(packet->iphv6 && (ntohl(packet->iphv6->ip6_dst.u6_addr.u6_addr32[0]) != 0xFF020000 /* ff02:: */))) {
+    if(ndpi_ether_is_discv4(packet) /*|| ndpi_is_discv5(packet)*/) { 
       ndpi_set_detected_protocol(ndpi_struct, flow, NDPI_PROTOCOL_ETHEREUM, NDPI_PROTOCOL_UNKNOWN, NDPI_CONFIDENCE_DPI);
       ndpi_ether_cache_connection(ndpi_struct, flow);
       return;
     }
   }
-  
   NDPI_EXCLUDE_PROTO(ndpi_struct, flow);
 }
 

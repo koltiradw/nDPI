@@ -40,7 +40,7 @@ void help() {
 
 static int verbose_dga_detection = 0;
 
-static void ndpi_dbg_fn(u_int32_t protocol,
+static void ndpi_dbg_fn(u_int16_t protocol,
                         struct ndpi_detection_module_struct *module_struct,
                         ndpi_log_level_t log_level, const char *file,
                         const char *func, unsigned line,
@@ -48,8 +48,10 @@ static void ndpi_dbg_fn(u_int32_t protocol,
 {
   assert(protocol == NDPI_PROTOCOL_UNKNOWN);
   assert(module_struct != NULL);
-  assert(log_level == NDPI_LOG_DEBUG_EXTRA);
+  /* While this program always logs at NDPI_LOG_DEBUG_EXTRA level, the
+     initialization of the library may log at any level */
 
+  (void)log_level;
   (void)file;
   (void)func;
   (void)line;
@@ -91,11 +93,11 @@ int main(int argc, char **argv) {
 
   /* Initialize nDPI detection module*/
   NDPI_PROTOCOL_BITMASK all;
-  struct ndpi_detection_module_struct *ndpi_str = ndpi_init_detection_module(ndpi_no_prefs);
+  struct ndpi_detection_module_struct *ndpi_str = ndpi_init_detection_module(NULL);
   assert(ndpi_str != NULL);
   NDPI_BITMASK_SET_ALL(all);
   ndpi_set_protocol_detection_bitmask2(ndpi_str, &all);
-  ndpi_set_log_level(ndpi_str, NDPI_LOG_DEBUG_EXTRA);
+  ndpi_set_config(ndpi_str, NULL, "log.level", "3"); /* NDPI_LOG_DEBUG_EXTRA */
   set_ndpi_debug_function(ndpi_str, ndpi_dbg_fn);
   ndpi_finalize_initialization(ndpi_str);
   assert(ndpi_str != NULL);

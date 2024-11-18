@@ -170,7 +170,14 @@ enum info_type {
     INFO_TIVOCONNECT,
     INFO_FTP_IMAP_POP_SMTP,
     INFO_NATPMP,
+    INFO_SIP,
 };
+
+typedef struct {
+  ndpi_address_port *aps;
+  unsigned int num_aps;
+  unsigned int num_aps_allocated;
+} ndpi_address_port_list;
 
 // flow tracking
 typedef struct ndpi_flow_info {
@@ -182,7 +189,7 @@ typedef struct ndpi_flow_info {
   struct ndpi_in6_addr dst_ip6; /* network order */
   u_int16_t src_port; /* network order */
   u_int16_t dst_port; /* network order */
-  u_int8_t detection_completed, protocol, bidirectional, check_extra_packets;
+  u_int8_t detection_completed, protocol, bidirectional, check_extra_packets, current_pkt_from_client_to_server;
   u_int16_t vlan_id;
   ndpi_packet_tunnel tunnel_type;
   struct ndpi_flow_struct *ndpi_flow;
@@ -208,8 +215,11 @@ typedef struct ndpi_flow_info {
   // result only, not used for flow identification
   ndpi_protocol detected_protocol;
   ndpi_confidence_t confidence;
+  struct ndpi_fpc_info fpc;
   u_int16_t num_dissector_calls;
   u_int16_t dpi_packets;
+  u_int8_t monitoring_state;
+  u_int16_t num_packets_before_monitoring;
 
   // Flow data analysis
   pkt_timeval src2dst_last_pkt_time, dst2src_last_pkt_time, flow_last_pkt_time;
@@ -253,11 +263,19 @@ typedef struct ndpi_flow_info {
       uint16_t external_port;
       char ip[16];
     } natpmp;
+
+    struct {
+      char from[256];
+      char from_imsi[16];
+      char to[256];
+      char to_imsi[16];
+    } sip;
   };
 
   ndpi_serializer ndpi_flow_serializer;
 
   char host_server_name[80]; /* Hostname/SNI */
+  char *server_hostname;
   char *bittorent_hash;
   char *dhcp_fingerprint;
   char *dhcp_class_ident;
@@ -273,7 +291,7 @@ typedef struct ndpi_flow_info {
       client_hassh[33], server_hassh[33], *server_names,
       *advertised_alpns, *negotiated_alpn, *tls_supported_versions,
       *tls_issuerDN, *tls_subjectDN,
-      ja3_client[33], ja3_server[33],
+      ja3_client[33], ja3_server[33], ja4_client[37], *ja4_client_raw,
       sha1_cert_fingerprint[20];
     u_int8_t sha1_cert_fingerprint_set;
     struct tls_heuristics browser_heuristics;
@@ -292,13 +310,21 @@ typedef struct ndpi_flow_info {
     ndpi_cipher_weakness client_unsafe_cipher, server_unsafe_cipher;
 
     u_int32_t quic_version;
+
+    struct ndpi_tls_obfuscated_heuristic_matching_set obfuscated_heur_matching_set;
   } ssh_tls;
 
   struct {
-    char url[256], request_content_type[64], content_type[64], user_agent[256], server[128], nat_ip[32], filename[256];
+    char url[256], request_content_type[64], content_type[64],
+      user_agent[256], server[128], nat_ip[32], username[64], password[64], filename[256];
     u_int response_status_code;
   } http;
 
+  struct {
+    ndpi_address_port_list mapped_address, peer_address,
+      relayed_address, response_origin, other_address;
+  } stun;
+  
   struct {
     char *username, *password;
   } telnet;
@@ -310,7 +336,7 @@ typedef struct ndpi_flow_info {
   ndpi_multimedia_flow_type multimedia_flow_type;
   
   void *src_id, *dst_id;
-
+  char *tcp_fingerprint;
   struct ndpi_entropy *entropy;
   struct ndpi_entropy *last_entropy;
 
@@ -374,12 +400,16 @@ typedef struct ndpi_workflow {
   struct ndpi_workflow_prefs prefs;
   struct ndpi_stats stats;
 
+  ndpi_workflow_callback_ptr flow_callback;
+  void * flow_callback_userdata;
+
   /* outside referencies */
   pcap_t *pcap_handle;
 
   /* allocated by prefs */
   void **ndpi_flows_root;
   struct ndpi_detection_module_struct *ndpi_struct;
+  struct ndpi_global_context *g_ctx;
   u_int32_t num_allocated_flows;
 
   /* CSV,TLV,JSON serialization interface */
@@ -388,7 +418,7 @@ typedef struct ndpi_workflow {
 
 
 /* TODO: remove wrappers parameters and use ndpi global, when their initialization will be fixed... */
-struct ndpi_workflow * ndpi_workflow_init(const struct ndpi_workflow_prefs * prefs, pcap_t * pcap_handle, int do_init_flows_root, ndpi_serialization_format serialization_format);
+struct ndpi_workflow * ndpi_workflow_init(const struct ndpi_workflow_prefs * prefs, pcap_t * pcap_handle, int do_init_flows_root, ndpi_serialization_format serialization_format, struct ndpi_global_context *g_ctx);
 
 
 /* workflow main free function */
@@ -406,7 +436,15 @@ void ndpi_free_flow_info_half(struct ndpi_flow_info *flow);
 struct ndpi_proto ndpi_workflow_process_packet(struct ndpi_workflow * workflow,
 					       const struct pcap_pkthdr *header,
 					       const u_char *packet,
-					       ndpi_risk *flow_risk);
+					       ndpi_risk *flow_risk,
+					       struct ndpi_flow_info **flow);
+
+
+/* Flow callback for completed flows, before the flow memory will be freed. */
+static inline void ndpi_workflow_set_flow_callback(struct ndpi_workflow * workflow, ndpi_workflow_callback_ptr callback, void * userdata) {
+  workflow->flow_callback = callback;
+  workflow->flow_callback_userdata = userdata;
+}
 
 int ndpi_is_datalink_supported(int datalink_type);
 
@@ -418,12 +456,12 @@ void ndpi_flow_info_freer(void *node);
 const char* print_cipher_id(u_int32_t cipher);
 int parse_proto_name_list(char *str, NDPI_PROTOCOL_BITMASK *bitmask, int inverted_logic);
 
-extern int nDPI_LogLevel;
+extern int reader_log_level;
 
 #if defined(NDPI_ENABLE_DEBUG_MESSAGES) && !defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
 #define LOG(log_level, args...)			\
   {						\
-    if(log_level <= nDPI_LogLevel)		\
+    if(log_level <= reader_log_level)		\
       printf(args);				\
   }
 #else
