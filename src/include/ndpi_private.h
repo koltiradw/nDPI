@@ -358,11 +358,7 @@ struct ndpi_detection_module_struct {
   /* *** If you add a new Patricia tree, please update ptree_type above! *** */
 
   struct {
-#ifdef USE_LEGACY_AHO_CORASICK
-    ndpi_automa hostnames, hostnames_shadow;
-#else
     ndpi_domain_classify *sc_hostnames, *sc_hostnames_shadow;
-#endif
     void *ipAddresses, *ipAddresses_shadow; /* Patricia */
     void *ipAddresses6, *ipAddresses6_shadow; /* Patricia IPv6*/
     u_int8_t categories_loaded;
@@ -691,7 +687,7 @@ const uint8_t *get_crypto_data(struct ndpi_detection_module_struct *ndpi_struct,
 int is_valid_rtp_payload_type(uint8_t type);
 int is_rtp_or_rtcp(struct ndpi_detection_module_struct *ndpi_struct,
                    const u_int8_t *payload, u_int16_t payload_len, u_int16_t *seq);
-u_int8_t rtp_get_stream_type(u_int8_t payloadType, ndpi_multimedia_flow_type *s_type);
+u_int8_t rtp_get_stream_type(u_int8_t payloadType, u_int8_t *s_type, u_int16_t sub_proto);
 
 /* Bittorrent */
 u_int64_t make_bittorrent_host_key(struct ndpi_flow_struct *flow, int client, int offset);

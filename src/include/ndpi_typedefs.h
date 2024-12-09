@@ -41,8 +41,6 @@
 /* Used by both nDPI core and patricia code under third-party */
 #include "ndpi_patricia_typedefs.h"
 
-// #define USE_LEGACY_AHO_CORASICK
-
 #ifndef NDPI_CFFI_PREPROCESSING
 #ifndef u_char
 typedef unsigned char u_char;
@@ -72,10 +70,10 @@ typedef enum {
 } ndpi_log_level_t;
 
 typedef enum {
-  ndpi_multimedia_unknown_flow = 0,
-  ndpi_multimedia_audio_flow,
-  ndpi_multimedia_video_flow,
-  ndpi_multimedia_screen_sharing_flow,
+  ndpi_multimedia_unknown_flow          = 0x00,
+  ndpi_multimedia_audio_flow            = 0x01,
+  ndpi_multimedia_video_flow            = 0x02,
+  ndpi_multimedia_screen_sharing_flow   = 0x04,
 } ndpi_multimedia_flow_type;
 
 typedef enum {
@@ -1358,7 +1356,7 @@ struct ndpi_flow_struct {
     char *username, *password;
   } http;
 
-  ndpi_multimedia_flow_type flow_multimedia_type;
+  u_int8_t flow_multimedia_types;
 
   /*
      Put outside of the union to avoid issues in case the protocol
@@ -1373,6 +1371,8 @@ struct ndpi_flow_struct {
   struct {
     u_int8_t maybe_dtls : 1, is_turn : 1, pad : 6;
     ndpi_address_port mapped_address, peer_address, relayed_address, response_origin, other_address;
+    u_int8_t num_xor_relayed_addresses, num_xor_mapped_addresses;
+    u_int8_t num_non_stun_pkt, non_stun_pkt_len[2];
   } stun;
 
   struct {
@@ -1628,8 +1628,8 @@ struct ndpi_flow_struct {
 _Static_assert(sizeof(((struct ndpi_flow_struct *)0)->protos) <= 264,
                "Size of the struct member protocols increased to more than 264 bytes, "
                "please check if this change is necessary.");
-_Static_assert(sizeof(struct ndpi_flow_struct) <= 1216,
-               "Size of the flow struct increased to more than 1216 bytes, "
+_Static_assert(sizeof(struct ndpi_flow_struct) <= 1224,
+               "Size of the flow struct increased to more than 1224 bytes, "
                "please check if this change is necessary.");
 #endif
 #endif
@@ -1698,7 +1698,7 @@ typedef enum {
 } ndpi_serialization_type;
 
 #define NDPI_SERIALIZER_DEFAULT_HEADER_SIZE 1024
-#define NDPI_SERIALIZER_DEFAULT_BUFFER_SIZE 8192
+#define NDPI_SERIALIZER_DEFAULT_BUFFER_SIZE  256
 #define NDPI_SERIALIZER_DEFAULT_BUFFER_INCR 1024
 
 #define NDPI_SERIALIZER_STATUS_COMMA     (1 << 0)
